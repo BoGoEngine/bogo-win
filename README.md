@@ -3,7 +3,7 @@
 
 Một số trang cần xem:
 
-* Milestone 0.1.0
+* Định hướng phát triển cho milestone 0.1.0
 
   https://github.com/BoGoEngine/bogo-win32/issues/milestones
 
