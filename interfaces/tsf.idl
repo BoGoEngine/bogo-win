@@ -1,0 +1,17 @@
+import "msctf.idl";
+
+
+[
+  uuid(6A160507-C2CC-4C37-A435-B4D645642BDD)
+]
+library TSF
+{
+	// This library defines a fake class that implements all the interfaces
+	// that we need to work with so that comtypes can generate the Python
+	// bindings for them.
+    [uuid(DEC2C382-120C-4D57-BEDA-9C15678C863F)]
+          coclass FakeClass {
+          interface ITfInputProcessorProfiles;
+          interface ITfCategoryMgr;
+    };
+};

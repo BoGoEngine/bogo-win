@@ -1,0 +1,17 @@
+import "oaidl.idl";
+import "ocidl.idl";
+import "msctf.idl";
+
+
+[
+  uuid(C4E07FAB-27D8-45C1-A647-DB6D4F590C31)
+]
+library BoGo
+{
+
+    [uuid(4581A23E-03EA-4614-975B-FF6206A8B840)]
+          coclass BoGo {
+          [default] interface ITfTextInputProcessor;
+          interface IDispatch;
+    };
+};
