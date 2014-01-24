@@ -9,17 +9,20 @@ import os
 from comtypes.gen.BoGo import BoGo
 from comtypes.gen.TSF import ITfInputProcessorProfiles, ITfCategoryMgr
 
-# I had to hack through Windoze's registry to find this number...
+# I had to hack through Windoze's registry to find these numbers...
 CLSID_TF_InputProcessorProfiles = "{33C53A50-F456-4884-B049-85FD643ECFED}"
+CLSID_TF_CategoryMgr = "{A4B544A1-438D-4B41-9325-869523E2D6C7}"
+GUID_TFCAT_TIP_KEYBOARD = GUID("{34745C63-B2F0-4784-8B67-5E12C8701A31}")
 
 
 class BoGoTextService(BoGo):
 
-    _reg_threading_ = "Both"
+    _reg_threading_ = "Apartment"
     _reg_progid_ = "BoGo.Server.1"
     _reg_novers_progid_ = "BoGo.Server"
     _reg_desc_ = "BoGo COM server"
     _reg_clsctx_ = comtypes.CLSCTX_INPROC_SERVER
+    # _reg_typelib_ = "interfaces\\bogo.tlb"
 
     def Activate(self, thread_manager, client_id):
         pass
@@ -28,7 +31,8 @@ class BoGoTextService(BoGo):
         pass
 
 
-def register_server_with_TSF():
+def on_registered():
+    # Register input profile (language, description,...)
     inputProcessorProfiles = comtypes.client.CreateObject(CLSID_TF_InputProcessorProfiles,
                                 clsctx=comtypes.CLSCTX_INPROC_SERVER,
                                 interface=ITfInputProcessorProfiles)
@@ -40,11 +44,13 @@ def register_server_with_TSF():
     description = ctypes.cast(description, ctypes.POINTER(ctypes.c_ushort))
 
     # http://msdn.microsoft.com/en-us/library/windows/desktop/dd318693%28v=vs.85%29.aspx
-    VI_VN = 0x012A
+    VI_VN = 0x042A
     
-    inputProcessorProfiles.Register(serverGUIDPointer)
+    hr = inputProcessorProfiles.Register(serverGUIDPointer)
 
-    inputProcessorProfiles.AddLanguageProfile(
+    print(hr)
+
+    hr = inputProcessorProfiles.AddLanguageProfile(
         serverGUIDPointer,
         VI_VN,
         profileGUIDPointer,
@@ -54,16 +60,15 @@ def register_server_with_TSF():
         -1,
         -1)
 
+    print(hr)
 
-if __name__=='__main__':
-    # ni only for 1.4!
-    from comtypes.server.register import UseCommandLine
-    UseCommandLine(BoGoTextService)
+    # Register categories (whether we do keyboard, voice,...)
+    categoryManager = comtypes.client.CreateObject(CLSID_TF_CategoryMgr,
+        clsctx=comtypes.CLSCTX_INPROC_SERVER,
+        interface=ITfCategoryMgr)
 
-    opts, args = w_getopt.w_getopt(sys.argv[1:],
-                                   "regserver unregserver embedding l: f: nodebug")
+    hr = categoryManager.RegisterCategory(serverGUIDPointer,
+        ctypes.pointer(GUID_TFCAT_TIP_KEYBOARD),
+        serverGUIDPointer)
 
-    if opts:
-        for option, value in opts:
-            if option == "regserver":
-                register_server_with_TSF()
+    print(hr)
