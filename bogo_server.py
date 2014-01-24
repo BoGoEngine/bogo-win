@@ -56,7 +56,7 @@ def register_server_with_TSF():
         serverGUIDPointer,
         VI_VN,
         profileGUIDPointer,
-        desc,
+        description,
         4,
         None,
         -1,
