@@ -4,6 +4,9 @@ from comtypes import GUID
 import ctypes
 import os
 
+import logging
+logging.basicConfig(filename=r'D:\bogo.log',level=logging.DEBUG)
+
 
 # The generated files are in $PYTHON\Lib\site-packages\comtypes\gen\
 from comtypes.gen.BoGo import BoGo
@@ -83,9 +86,10 @@ class BoGoTextService(BoGo):
 
         registrar._unregister(BoGoTextService)
 
-    def Activate(self, thread_manager, client_id):
-        pass
+    def Activate(self, this, thread_manager, client_id):
+        logging.debug("Activated")
+        return 0
 
     def Deactivate(self):
-        pass
+        logging.debug("Deactivated")
 
