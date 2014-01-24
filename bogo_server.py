@@ -14,8 +14,8 @@ comtypes.client.gen_dir = os.path.dirname(__file__) + "interfaces/gen/"
 GetModule("interfaces/bogo.tlb")
 GetModule("interfaces/tsf.tlb")
 
-from .interfaces.gen.BoGo import BoGo
-from .interfaces.gen.TSF import ITfInputProcessorProfiles
+from interfaces.gen.BoGo import BoGo
+from interfaces.gen.TSF import ITfInputProcessorProfiles
 
 # I had to hack through Windoze's registry to find this number...
 CLSID_TF_InputProcessorProfiles = "{33C53A50-F456-4884-B049-85FD643ECFED}"
