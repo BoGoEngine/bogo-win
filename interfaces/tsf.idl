@@ -11,6 +11,8 @@ library TSF
 	// bindings for them.
     [uuid(DEC2C382-120C-4D57-BEDA-9C15678C863F)]
           coclass FakeClass {
+          interface ITfThreadMgr;
+          interface ITfKeystrokeMgr;
           interface ITfInputProcessorProfiles;
           interface ITfCategoryMgr;
     };

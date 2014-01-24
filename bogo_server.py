@@ -10,7 +10,9 @@ logging.basicConfig(filename=r'D:\bogo.log',level=logging.DEBUG)
 
 # The generated files are in $PYTHON\Lib\site-packages\comtypes\gen\
 from comtypes.gen.BoGo import BoGo
-from comtypes.gen.TSF import ITfInputProcessorProfiles, ITfCategoryMgr
+from comtypes.gen.TSF import ITfInputProcessorProfiles, \
+                             ITfCategoryMgr, \
+                             ITfKeystrokeMgr
 
 # I had to hack through Windoze's registry to find these numbers...
 CLSID_TF_InputProcessorProfiles = "{33C53A50-F456-4884-B049-85FD643ECFED}"
@@ -86,10 +88,46 @@ class BoGoTextService(BoGo):
 
         registrar._unregister(BoGoTextService)
 
+    #
+    # ITfTextInputProcessor
+    #
+
     def Activate(self, this, thread_manager, client_id):
         logging.debug("Activated")
+        keystroke_manager = thread_manager.QueryInterface(ITfKeystrokeMgr)
+
+        keystroke_manager.AdviseKeyEventSink(client_id, self, True)
         return 0
 
     def Deactivate(self):
         logging.debug("Deactivated")
 
+    #
+    # ITfKeyEventSink
+    #
+
+    # The OnTestKey* methods are used by TSF to probe whether we will eat/handle the key
+    # or not. After an OnTestKey* method returns True (eaten), another OnKey* event will
+    # be fired.
+
+    def OnTestKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
+        logging.debug("OnTestKeyDown: %s", virtual_key_code)
+        out_eaten[0] = True
+
+    def OnKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
+        logging.debug("OnKeyDown: %s", virtual_key_code)
+        out_eaten[0] = True
+
+    def OnTestKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
+        logging.debug("OnTestKeyUp: %s", virtual_key_code)
+        out_eaten[0] = False
+
+    def OnKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
+        logging.debug("OnKeyUp: %s", virtual_key_code)
+        out_eaten[0] = False
+
+    def OnPreservedKey(self, input_context, preserved_key_guid):
+        pass
+
+    def OnSetFocus(self, we_get_focus):
+        logging.debug("OnSetFocus: we_get_focus? %s", we_get_focus)

@@ -12,6 +12,7 @@ library BoGo
     [uuid(4581A23E-03EA-4614-975B-FF6206A8B840)]
           coclass BoGo {
           [default] interface ITfTextInputProcessor;
+          interface ITfKeyEventSink;
           interface IDispatch;
     };
 };
