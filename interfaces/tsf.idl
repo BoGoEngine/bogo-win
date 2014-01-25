@@ -6,14 +6,19 @@ import "msctf.idl";
 ]
 library TSF
 {
-	// This library defines a fake class that implements all the interfaces
-	// that we need to work with so that comtypes can generate the Python
-	// bindings for them.
+    // This library defines a fake class that implements all the interfaces
+    // that we need to work with so that comtypes can generate the Python
+    // bindings for them.
     [uuid(DEC2C382-120C-4D57-BEDA-9C15678C863F)]
-          coclass FakeClass {
-          interface ITfThreadMgr;
-          interface ITfKeystrokeMgr;
-          interface ITfInputProcessorProfiles;
-          interface ITfCategoryMgr;
+    coclass Manager {
+        interface ITfThreadMgr;
+        interface ITfKeystrokeMgr;
+        interface ITfCategoryMgr;
+        interface ITfInputProcessorProfiles;
+    };
+
+    [uuid(291C171A-BF7F-44AB-9C69-E41EB4F19826)]
+    coclass InputContext {
+        interface ITfInsertAtSelection;
     };
 };

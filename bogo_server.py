@@ -12,13 +12,19 @@ logging.basicConfig(filename=r'D:\bogo.log',level=logging.DEBUG)
 from comtypes.gen.BoGo import BoGo
 from comtypes.gen.TSF import ITfInputProcessorProfiles, \
                              ITfCategoryMgr, \
-                             ITfKeystrokeMgr
+                             ITfKeystrokeMgr, \
+                             ITfInsertAtSelection
 
 # I had to hack through Windoze's registry to find these numbers...
-CLSID_TF_InputProcessorProfiles = "{33C53A50-F456-4884-B049-85FD643ECFED}"
-CLSID_TF_CategoryMgr = "{A4B544A1-438D-4B41-9325-869523E2D6C7}"
-GUID_TFCAT_TIP_KEYBOARD = GUID("{34745C63-B2F0-4784-8B67-5E12C8701A31}")
+CLSID_TF_InputProcessorProfiles = GUID("{33C53A50-F456-4884-B049-85FD643ECFED}")
+CLSID_TF_CategoryMgr            = GUID("{A4B544A1-438D-4B41-9325-869523E2D6C7}")
+GUID_TFCAT_TIP_KEYBOARD         = GUID("{34745C63-B2F0-4784-8B67-5E12C8701A31}")
+
 serverGUIDPointer = ctypes.pointer(GUID("{4581A23E-03EA-4614-975B-FF6206A8B840}"))
+
+
+def text_to_ushort_array(text):
+    return ctypes.cast(ctypes.c_wchar_p(text), ctypes.POINTER(ctypes.c_ushort))
 
 
 class BoGoTextService(BoGo):
@@ -45,8 +51,7 @@ class BoGoTextService(BoGo):
 
         profileGUIDPointer = serverGUIDPointer
 
-        description = ctypes.c_wchar_p("BoGo")
-        description = ctypes.cast(description, ctypes.POINTER(ctypes.c_ushort))
+        description = text_to_ushort_array("BoGo")
 
         # http://msdn.microsoft.com/en-us/library/windows/desktop/dd318693%28v=vs.85%29.aspx
         VI_VN = 0x042A
@@ -92,12 +97,13 @@ class BoGoTextService(BoGo):
     # ITfTextInputProcessor
     #
 
-    def Activate(self, this, thread_manager, client_id):
+    def Activate(self, thread_manager, client_id):
         logging.debug("Activated")
-        keystroke_manager = thread_manager.QueryInterface(ITfKeystrokeMgr)
 
+        self.client_id = client_id
+
+        keystroke_manager = thread_manager.QueryInterface(ITfKeystrokeMgr)
         keystroke_manager.AdviseKeyEventSink(client_id, self, True)
-        return 0
 
     def Deactivate(self):
         logging.debug("Deactivated")
@@ -112,7 +118,34 @@ class BoGoTextService(BoGo):
 
     def OnTestKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnTestKeyDown: %s", virtual_key_code)
-        out_eaten[0] = True
+
+        # edit_session = EditSession()
+        self.input_context = input_context
+
+        if chr(virtual_key_code) == "A":
+            # This call is synchronous and won't return after edit_session.DoEditSession() returns
+            # after being called by TSF.
+
+            self.commit_text("BoGo")
+
+            # if ret == TS_E_READONLY:
+            #     pass
+
+            # FIXME Do something with ret
+
+            out_eaten[0] = True
+        else:
+            out_eaten[0] = False
+
+    def commit_text(self, text):
+        TF_ES_ASYNCDONTCARE   = 0x0
+        TF_ES_SYNC            = 0x1
+        TF_ES_READ            = 0x2
+        TF_ES_READWRITE       = 0x6
+        TF_ES_ASYNC           = 0x8
+
+        self.text_to_commit = text_to_ushort_array(text), len(text)
+        return self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
 
     def OnKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnKeyDown: %s", virtual_key_code)
@@ -131,3 +164,16 @@ class BoGoTextService(BoGo):
 
     def OnSetFocus(self, we_get_focus):
         logging.debug("OnSetFocus: we_get_focus? %s", we_get_focus)
+
+    #
+    # ITfEditSession
+    #
+
+    def DoEditSession(self, edit_cookie):
+        # start_range = self.input_context.GetStart(edit_cookie)
+        # start_range.SetText(edit_cookie, 0, )
+
+        text, length = self.text_to_commit
+
+        inserter = self.input_context.QueryInterface(ITfInsertAtSelection)
+        out = inserter.InsertTextAtSelection(edit_cookie, 0, text, length)
