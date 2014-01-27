@@ -7,22 +7,26 @@ import os
 import logging
 logging.basicConfig(filename=r'D:\bogo.log',level=logging.DEBUG)
 
+import utils
+
 
 # The generated files are in $PYTHON\Lib\site-packages\comtypes\gen\
 from comtypes.gen.BoGo import BoGo
-from comtypes.gen.TSF import ITfInputProcessorProfiles, \
-                             ITfCategoryMgr, \
-                             ITfKeystrokeMgr, \
-                             ITfInsertAtSelection
+from comtypes.gen.TSF import *
+
 
 # I had to hack through Windoze's registry to find these numbers...
 CLSID_TF_InputProcessorProfiles = GUID("{33C53A50-F456-4884-B049-85FD643ECFED}")
 CLSID_TF_CategoryMgr            = GUID("{A4B544A1-438D-4B41-9325-869523E2D6C7}")
 GUID_TFCAT_TIP_KEYBOARD         = GUID("{34745C63-B2F0-4784-8B67-5E12C8701A31}")
 
+TF_ES_ASYNCDONTCARE   = 0x0
+TF_ES_SYNC            = 0x1
+TF_ES_READ            = 0x2
+TF_ES_READWRITE       = 0x6
+TF_ES_ASYNC           = 0x8
+
 serverGUIDPointer = ctypes.pointer(GUID("{4581A23E-03EA-4614-975B-FF6206A8B840}"))
-
-
 
 
 class BoGoTextService(BoGo):
@@ -117,33 +121,41 @@ class BoGoTextService(BoGo):
     def OnTestKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnTestKeyDown: %s", virtual_key_code)
 
-        # edit_session = EditSession()
         self.input_context = input_context
 
         if chr(virtual_key_code) == "A":
-            # This call is synchronous and won't return after edit_session.DoEditSession() returns
-            # after being called by TSF.
+            self.delete_prev_chars(4)
 
+            out_eaten[0] = True
+        elif chr(virtual_key_code) == "B":
             self.commit_text("BoGo")
-
-            # if ret == TS_E_READONLY:
-            #     pass
-
-            # FIXME Do something with ret
-
             out_eaten[0] = True
         else:
             out_eaten[0] = False
 
     def commit_text(self, text):
         self.text_to_commit = utils.text_to_ushort_array(text), len(text)
-        TF_ES_ASYNCDONTCARE   = 0x0
-        TF_ES_SYNC            = 0x1
-        TF_ES_READ            = 0x2
-        TF_ES_READWRITE       = 0x6
-        TF_ES_ASYNC           = 0x8
 
+        self.editing_operation = "commit"
         return self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
+
+    def delete_prev_chars(self, count):
+
+        TS_SS_TRANSITORY = 0x4
+        status = self.input_context.GetStatus()
+
+        # http://blogs.msdn.com/b/tsfaware/archive/2007/04/25/transitory-contexts.aspx
+        is_in_transitory_context = status.dwStaticFlags & TS_SS_TRANSITORY != 0
+        logging.debug("Is in transitory state: %s", is_in_transitory_context)
+
+        if is_in_transitory_context:
+            shell = comtypes.client.CreateObject("WScript.Shell")
+            for i in xrange(count):
+                shell.SendKeys("{Backspace}")
+        else:
+            self.editing_operation = "delete-prev-chars"
+            self.delete_count = count
+            self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
 
     def OnKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnKeyDown: %s", virtual_key_code)
@@ -168,10 +180,37 @@ class BoGoTextService(BoGo):
     #
 
     def DoEditSession(self, edit_cookie):
-        # start_range = self.input_context.GetStart(edit_cookie)
-        # start_range.SetText(edit_cookie, 0, )
 
-        text, length = self.text_to_commit
+        TS_DEFAULT_SELECTION = -1
+        selection, count = self.input_context.GetSelection(edit_cookie, TS_DEFAULT_SELECTION, 1)
 
-        inserter = self.input_context.QueryInterface(ITfInsertAtSelection)
-        out = inserter.InsertTextAtSelection(edit_cookie, 0, text, length)
+        _range = selection.range
+
+        # FIXME:
+        # Manual dispatching with state like this makes me cringe.
+        # We should have separate CommitEditSession, DeleteEditSession, etc. classes.
+        if self.editing_operation == "commit":
+            text, length = self.text_to_commit
+
+            inserter = self.input_context.QueryInterface(ITfInsertAtSelection)
+            out = inserter.InsertTextAtSelection(edit_cookie, 0, text, length)
+
+            # Move the carret to the end of our newly inserted string
+            _range.Collapse(edit_cookie, TF_ANCHOR_END)
+
+            style = TF_SELECTIONSTYLE()
+            style.ase = TF_AE_NONE
+            style.fInterimChar = False
+
+            new_selection = TF_SELECTION()
+            new_selection.style = style
+            new_selection.range = _range
+
+            self.input_context.SetSelection(edit_cookie, 1, new_selection)
+
+        elif self.editing_operation == "delete-prev-chars":
+            moved_chars = _range.ShiftStart(edit_cookie, -self.delete_count, None)
+            logging.debug("moved_chars: %s", moved_chars)
+
+            TF_ST_CORRECTION = 1
+            _range.SetText(edit_cookie, TF_ST_CORRECTION, utils.text_to_ushort_array(""), 0)
