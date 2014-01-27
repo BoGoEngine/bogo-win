@@ -15,7 +15,7 @@ Một số trang cần xem:
 
   https://github.com/BoGoEngine/bogo-win32/wiki/Facts-&-Decisions
 
-## Hướng dẫn cài đặt
+## Hướng dẫn cài đặt từ mã nguồn
 
 Cài dependency:
 
@@ -29,7 +29,7 @@ Build file DLL:
 
 Đăng ký file DLL (cần quyền Administrator):
 
-    regsvr32 dist\testComServer.dll
+    regsvr32 dist\bogo.dll
 
 BoGo sẽ hiện ra trong danh sách các input method:
 
