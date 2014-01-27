@@ -143,10 +143,19 @@ class BoGoTextService(BoGo):
             return
 
         if virtual_key_code == VK_BACK:
-            self.raw_string = self.raw_string[:-1]
-            self.old_string = self.old_string[:-1]
-            if self.old_string == "":
-                self.reset()
+            # Logic copied from ibus-bogo
+            if self.old_string != "":
+                deleted_char = self.old_string[-1]
+                self.old_string = self.old_string[:-1]
+                self.raw_string = self.raw_string[:-1]
+
+                if len(self.old_string) == 0:
+                    self.reset()
+                else:
+                    index = self.raw_string.rfind(deleted_char)
+                    self.raw_string = self.raw_string[:-2] if index < 0 else \
+                        self.raw_string[:index] + \
+                        self.raw_string[(index + 1):]
             out_eaten[0] = False
             return
 
