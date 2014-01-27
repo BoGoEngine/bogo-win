@@ -33,9 +33,12 @@ TF_ES_READ            = 0x2
 TF_ES_READWRITE       = 0x6
 TF_ES_ASYNC           = 0x8
 
-WM_CHAR  = 0x0102
-VK_BACK  = 0x08
-VK_SPACE = 0x20
+WM_CHAR    = 0x0102
+
+VK_BACK    = 0x08
+VK_CONTROL = 0x11
+VK_MENU    = 0x12
+VK_SPACE   = 0x20
 
 serverGUIDPointer = ctypes.pointer(GUID("{4581A23E-03EA-4614-975B-FF6206A8B840}"))
 
@@ -160,7 +163,26 @@ class BoGoTextService(BoGo):
             return
 
         if self.we_will_eat(virtual_key_code):
-            new_string, raw_string = bogo.process_key(self.old_string, chr(virtual_key_code))
+
+            # FIXME: Refactor the ToAscii code to a function/method
+            keyboard_state = (ctypes.c_ubyte * 256)()
+
+            if ctypes.windll.user32.GetKeyboardState(keyboard_state) is False:
+                error = ctypes.windll.kernel32.GetLastError()
+                logging.debug("GetKeyboardState() Error: %x", error)
+
+            scan_code = (key_info >> 16) & 0xFF
+            buff  = ctypes.create_string_buffer(2)
+            output = ctypes.windll.user32.ToAscii(virtual_key_code, scan_code, keyboard_state, buff, 0)
+
+            logging.debug("ToAscii() - %s - %s", output, buff.value)
+            logging.debug("CTRL: %s ALT: %s", keyboard_state[VK_CONTROL], keyboard_state[VK_MENU])
+
+            if keyboard_state[VK_MENU] or keyboard_state[VK_CONTROL]:
+                out_eaten[0] = False
+                return
+
+            new_string, raw_string = bogo.process_key(self.old_string, buff.value, self.raw_string)
 
             same_initial_chars = list(takewhile(unicode.__eq__, zip(self.old_string, self.new_string)))
             n_backspace = len(self.old_string) - len(same_initial_chars)
