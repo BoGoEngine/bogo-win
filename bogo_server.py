@@ -108,6 +108,7 @@ class BoGoTextService(BoGo):
         logging.debug("Activated")
 
         self.client_id = client_id
+        self.thread_manager = thread_manager
 
         keystroke_manager = thread_manager.QueryInterface(ITfKeystrokeMgr)
         keystroke_manager.AdviseKeyEventSink(client_id, self, True)
@@ -116,6 +117,10 @@ class BoGoTextService(BoGo):
 
     def Deactivate(self):
         logging.debug("Deactivated")
+
+        keystroke_manager = self.thread_manager.QueryInterface(ITfKeystrokeMgr)
+        keystroke_manager.UnadviseKeyEventSink(self.client_id)
+
         self.reset()
 
     #
