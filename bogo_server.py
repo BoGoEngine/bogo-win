@@ -1,12 +1,19 @@
+from __future__ import unicode_literals
 import sys
 import comtypes
 from comtypes import GUID
 import ctypes
 import os
+from itertools import takewhile
 
 import logging
-logging.basicConfig(filename=r'D:\bogo.log',level=logging.DEBUG)
+logging.basicConfig(filename=r'D:\bogo.log', level=logging.DEBUG)
 
+# We aren't interested in DEBUG messages from comtypes
+comtypes_logger = logging.getLogger("comtypes")
+comtypes_logger.setLevel(logging.WARNING)
+
+import bogo
 import utils
 
 
@@ -25,6 +32,10 @@ TF_ES_SYNC            = 0x1
 TF_ES_READ            = 0x2
 TF_ES_READWRITE       = 0x6
 TF_ES_ASYNC           = 0x8
+
+WM_CHAR  = 0x0102
+VK_BACK  = 0x08
+VK_SPACE = 0x20
 
 serverGUIDPointer = ctypes.pointer(GUID("{4581A23E-03EA-4614-975B-FF6206A8B840}"))
 
@@ -58,11 +69,9 @@ class BoGoTextService(BoGo):
         # http://msdn.microsoft.com/en-us/library/windows/desktop/dd318693%28v=vs.85%29.aspx
         VI_VN = 0x042A
 
-        hr = inputProcessorProfiles.Register(serverGUIDPointer)
+        inputProcessorProfiles.Register(serverGUIDPointer)
 
-        print(hr)
-
-        hr = inputProcessorProfiles.AddLanguageProfile(
+        inputProcessorProfiles.AddLanguageProfile(
             serverGUIDPointer,
             VI_VN,
             profileGUIDPointer,
@@ -72,18 +81,14 @@ class BoGoTextService(BoGo):
             -1,
             -1)
 
-        print(hr)
-
         # Register categories (whether we do keyboard, voice,...)
         categoryManager = comtypes.client.CreateObject(CLSID_TF_CategoryMgr,
             clsctx=comtypes.CLSCTX_INPROC_SERVER,
             interface=ITfCategoryMgr)
 
-        hr = categoryManager.RegisterCategory(serverGUIDPointer,
+        categoryManager.RegisterCategory(serverGUIDPointer,
             ctypes.pointer(GUID_TFCAT_TIP_KEYBOARD),
             serverGUIDPointer)
-
-        print(hr)
 
     @classmethod
     def _unregister(self, registrar):
@@ -107,8 +112,11 @@ class BoGoTextService(BoGo):
         keystroke_manager = thread_manager.QueryInterface(ITfKeystrokeMgr)
         keystroke_manager.AdviseKeyEventSink(client_id, self, True)
 
+        self.reset()
+
     def Deactivate(self):
         logging.debug("Deactivated")
+        self.reset()
 
     #
     # ITfKeyEventSink
@@ -116,46 +124,41 @@ class BoGoTextService(BoGo):
 
     # The OnTestKey* methods are used by TSF to probe whether we will eat/handle the key
     # or not. After an OnTestKey* method returns True (eaten), another OnKey* event will
-    # be fired.
+    # be fired. We will always return True in OnKey* and do all handling in OnTestKey*
 
     def OnTestKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnTestKeyDown: %s", virtual_key_code)
+        # out_eaten[0] = self.we_will_eat(virtual_key_code)
 
         self.input_context = input_context
 
-        if chr(virtual_key_code) == "A":
-            self.delete_prev_chars(4)
+        if virtual_key_code == VK_SPACE:
+            self.reset()
+            out_eaten[0] = False
+            return
 
-            out_eaten[0] = True
-        elif chr(virtual_key_code) == "B":
-            self.commit_text("BoGo")
+        if virtual_key_code == VK_BACK:
+            self.raw_string = self.raw_string[:-1]
+            self.old_string = self.old_string[:-1]
+            if self.old_string == "":
+                self.reset()
+            out_eaten[0] = False
+            return
+
+        if self.we_will_eat(virtual_key_code):
+            new_string, raw_string = bogo.process_key(self.old_string, chr(virtual_key_code))
+
+            same_initial_chars = list(takewhile(unicode.__eq__, zip(self.old_string, self.new_string)))
+            n_backspace = len(self.old_string) - len(same_initial_chars)
+
+            self.delete_prev_chars(n_backspace)
+            self.commit_text(new_string)
+
+            self.old_string = new_string
+            self.raw_string = raw_string
             out_eaten[0] = True
         else:
             out_eaten[0] = False
-
-    def commit_text(self, text):
-        self.text_to_commit = utils.text_to_ushort_array(text), len(text)
-
-        self.editing_operation = "commit"
-        return self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
-
-    def delete_prev_chars(self, count):
-
-        TS_SS_TRANSITORY = 0x4
-        status = self.input_context.GetStatus()
-
-        # http://blogs.msdn.com/b/tsfaware/archive/2007/04/25/transitory-contexts.aspx
-        is_in_transitory_context = status.dwStaticFlags & TS_SS_TRANSITORY != 0
-        logging.debug("Is in transitory state: %s", is_in_transitory_context)
-
-        if is_in_transitory_context:
-            shell = comtypes.client.CreateObject("WScript.Shell")
-            for i in xrange(count):
-                shell.SendKeys("{Backspace}")
-        else:
-            self.editing_operation = "delete-prev-chars"
-            self.delete_count = count
-            self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
 
     def OnKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnKeyDown: %s", virtual_key_code)
@@ -163,17 +166,22 @@ class BoGoTextService(BoGo):
 
     def OnTestKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnTestKeyUp: %s", virtual_key_code)
-        out_eaten[0] = False
+
+        if virtual_key_code == 65:
+            out_eaten[0] = True
+        else:
+            out_eaten[0] = False
 
     def OnKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnKeyUp: %s", virtual_key_code)
-        out_eaten[0] = False
+        out_eaten[0] = True
 
     def OnPreservedKey(self, input_context, preserved_key_guid):
+        # This thing is used to handle custom shortcut combinations
         pass
 
     def OnSetFocus(self, we_get_focus):
-        logging.debug("OnSetFocus: we_get_focus? %s", we_get_focus)
+        logging.debug("OnSetFocus(we_get_focus=%s)", we_get_focus)
 
     #
     # ITfEditSession
@@ -196,17 +204,17 @@ class BoGoTextService(BoGo):
             out = inserter.InsertTextAtSelection(edit_cookie, 0, text, length)
 
             # Move the carret to the end of our newly inserted string
-            _range.Collapse(edit_cookie, TF_ANCHOR_END)
+            # _range.Collapse(edit_cookie, TF_ANCHOR_END)
 
-            style = TF_SELECTIONSTYLE()
-            style.ase = TF_AE_NONE
-            style.fInterimChar = False
+            # style = TF_SELECTIONSTYLE()
+            # style.ase = TF_AE_NONE
+            # style.fInterimChar = False
 
-            new_selection = TF_SELECTION()
-            new_selection.style = style
-            new_selection.range = _range
+            # new_selection = TF_SELECTION()
+            # new_selection.style = style
+            # new_selection.range = _range
 
-            self.input_context.SetSelection(edit_cookie, 1, new_selection)
+            # self.input_context.SetSelection(edit_cookie, 1, new_selection)
 
         elif self.editing_operation == "delete-prev-chars":
             moved_chars = _range.ShiftStart(edit_cookie, -self.delete_count, None)
@@ -214,3 +222,47 @@ class BoGoTextService(BoGo):
 
             TF_ST_CORRECTION = 1
             _range.SetText(edit_cookie, TF_ST_CORRECTION, utils.text_to_ushort_array(""), 0)
+
+    #
+    # BoGo
+    #
+
+    def we_will_eat(self, virtual_key_code):
+        # A-Z
+        return virtual_key_code in range(65, 91)
+
+    def reset(self):
+        logging.debug("reset()")
+        self.new_string = ""
+        self.old_string = ""
+        self.raw_string = ""
+
+    def commit_text(self, text):
+        logging.debug("commit_text(%s)", text)
+        self.text_to_commit = utils.text_to_ushort_array(text), len(text)
+
+        self.editing_operation = "commit"
+        return self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
+
+    def delete_prev_chars(self, count):
+        logging.debug("delete_prev_chars(%s)", count)
+
+        # Somehow SendMessageW still sends a backspace if count == 0 so
+        # we have to explicitly check it like this.
+        if count <= 0:
+            return
+
+        if self.is_in_transitory_context():
+            hwnd = self.input_context.GetActiveView().GetWnd()
+            ctypes.windll.user32.SendMessageW(hwnd, WM_CHAR, VK_BACK, count)
+        else:
+            self.editing_operation = "delete-prev-chars"
+            self.delete_count = count
+            self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
+
+    def is_in_transitory_context(self):
+        # http://blogs.msdn.com/b/tsfaware/archive/2007/04/25/transitory-contexts.aspx
+        TS_SS_TRANSITORY = 0x4
+        status = self.input_context.GetStatus()
+
+        return status.dwStaticFlags & TS_SS_TRANSITORY != 0
