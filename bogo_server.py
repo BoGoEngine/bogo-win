@@ -23,8 +23,6 @@ GUID_TFCAT_TIP_KEYBOARD         = GUID("{34745C63-B2F0-4784-8B67-5E12C8701A31}")
 serverGUIDPointer = ctypes.pointer(GUID("{4581A23E-03EA-4614-975B-FF6206A8B840}"))
 
 
-def text_to_ushort_array(text):
-    return ctypes.cast(ctypes.c_wchar_p(text), ctypes.POINTER(ctypes.c_ushort))
 
 
 class BoGoTextService(BoGo):
@@ -51,7 +49,7 @@ class BoGoTextService(BoGo):
 
         profileGUIDPointer = serverGUIDPointer
 
-        description = text_to_ushort_array("BoGo")
+        description = utils.text_to_ushort_array("BoGo")
 
         # http://msdn.microsoft.com/en-us/library/windows/desktop/dd318693%28v=vs.85%29.aspx
         VI_VN = 0x042A
@@ -138,13 +136,13 @@ class BoGoTextService(BoGo):
             out_eaten[0] = False
 
     def commit_text(self, text):
+        self.text_to_commit = utils.text_to_ushort_array(text), len(text)
         TF_ES_ASYNCDONTCARE   = 0x0
         TF_ES_SYNC            = 0x1
         TF_ES_READ            = 0x2
         TF_ES_READWRITE       = 0x6
         TF_ES_ASYNC           = 0x8
 
-        self.text_to_commit = text_to_ushort_array(text), len(text)
         return self.input_context.RequestEditSession(self.client_id, self, TF_ES_SYNC | TF_ES_READWRITE)
 
     def OnKeyDown(self, this, input_context, virtual_key_code, key_info, out_eaten):
