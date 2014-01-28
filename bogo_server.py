@@ -207,11 +207,7 @@ class BoGoTextService(BoGo):
 
     def OnTestKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnTestKeyUp: %s", virtual_key_code)
-
-        if virtual_key_code == 65:
-            out_eaten[0] = True
-        else:
-            out_eaten[0] = False
+        out_eaten[0] = False
 
     def OnKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnKeyUp: %s", virtual_key_code)
