@@ -178,7 +178,12 @@ class BoGoTextService(BoGo):
             logging.debug("ToAscii() - %s - %s", output, buff.value)
             logging.debug("CTRL: %s ALT: %s", keyboard_state[VK_CONTROL], keyboard_state[VK_MENU])
 
-            if keyboard_state[VK_MENU] or keyboard_state[VK_CONTROL]:
+            def is_key_down(key_state):
+                return key_state & (1 << 7) != 0
+
+            if is_key_down(keyboard_state[VK_MENU]) or \
+                    is_key_down(keyboard_state[VK_CONTROL]):
+                self.reset()
                 out_eaten[0] = False
                 return
 
