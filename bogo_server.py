@@ -33,6 +33,8 @@ TF_ES_READ            = 0x2
 TF_ES_READWRITE       = 0x6
 TF_ES_ASYNC           = 0x8
 
+WM_KEYDOWN = 0x0100
+WM_KEYUP   = 0x0101
 WM_CHAR    = 0x0102
 
 VK_BACK    = 0x08
@@ -291,7 +293,10 @@ class BoGoTextService(BoGo):
 
         if self.is_in_transitory_context():
             hwnd = self.input_context.GetActiveView().GetWnd()
-            ctypes.windll.user32.SendMessageW(hwnd, WM_CHAR, VK_BACK, count)
+            for i in range(count):
+                ctypes.windll.user32.SendMessageW(hwnd, WM_KEYDOWN, VK_BACK, 1)
+                ctypes.windll.user32.SendMessageW(hwnd, WM_KEYUP  , VK_BACK, 1)
+                ctypes.windll.user32.SendMessageW(hwnd, WM_CHAR   , VK_BACK, 1)
         else:
             self.editing_operation = "delete-prev-chars"
             self.delete_count = count
