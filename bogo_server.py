@@ -169,7 +169,8 @@ class BoGoTextService(BoGo):
             # FIXME: Refactor the ToAscii code to a function/method
             keyboard_state = (ctypes.c_ubyte * 256)()
 
-            if ctypes.windll.user32.GetKeyboardState(keyboard_state) is False:
+            if ctypes.windll.user32.GetKeyboardState(keyboard_state) == 0:
+                ctypes.memset(keyboard_state, 0, 256)
                 error = ctypes.windll.kernel32.GetLastError()
                 logging.debug("GetKeyboardState() Error: %x", error)
 
