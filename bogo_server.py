@@ -33,6 +33,8 @@ TF_ES_READ            = 0x2
 TF_ES_READWRITE       = 0x6
 TF_ES_ASYNC           = 0x8
 
+WM_KEYDOWN = 0x0100
+WM_KEYUP   = 0x0101
 WM_CHAR    = 0x0102
 
 VK_BACK    = 0x08
@@ -167,7 +169,8 @@ class BoGoTextService(BoGo):
             # FIXME: Refactor the ToAscii code to a function/method
             keyboard_state = (ctypes.c_ubyte * 256)()
 
-            if ctypes.windll.user32.GetKeyboardState(keyboard_state) is False:
+            if ctypes.windll.user32.GetKeyboardState(keyboard_state) == 0:
+                ctypes.memset(keyboard_state, 0, 256)
                 error = ctypes.windll.kernel32.GetLastError()
                 logging.debug("GetKeyboardState() Error: %x", error)
 
@@ -178,7 +181,12 @@ class BoGoTextService(BoGo):
             logging.debug("ToAscii() - %s - %s", output, buff.value)
             logging.debug("CTRL: %s ALT: %s", keyboard_state[VK_CONTROL], keyboard_state[VK_MENU])
 
-            if keyboard_state[VK_MENU] or keyboard_state[VK_CONTROL]:
+            def is_key_down(key_state):
+                return key_state & (1 << 7) != 0
+
+            if is_key_down(keyboard_state[VK_MENU]) or \
+                    is_key_down(keyboard_state[VK_CONTROL]):
+                self.reset()
                 out_eaten[0] = False
                 return
 
@@ -202,11 +210,7 @@ class BoGoTextService(BoGo):
 
     def OnTestKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnTestKeyUp: %s", virtual_key_code)
-
-        if virtual_key_code == 65:
-            out_eaten[0] = True
-        else:
-            out_eaten[0] = False
+        out_eaten[0] = False
 
     def OnKeyUp(self, this, input_context, virtual_key_code, key_info, out_eaten):
         logging.debug("OnKeyUp: %s", virtual_key_code)
@@ -290,7 +294,10 @@ class BoGoTextService(BoGo):
 
         if self.is_in_transitory_context():
             hwnd = self.input_context.GetActiveView().GetWnd()
-            ctypes.windll.user32.SendMessageW(hwnd, WM_CHAR, VK_BACK, count)
+            for i in range(count):
+                ctypes.windll.user32.SendMessageW(hwnd, WM_KEYDOWN, VK_BACK, 1)
+                ctypes.windll.user32.SendMessageW(hwnd, WM_KEYUP  , VK_BACK, 1)
+                ctypes.windll.user32.SendMessageW(hwnd, WM_CHAR   , VK_BACK, 1)
         else:
             self.editing_operation = "delete-prev-chars"
             self.delete_count = count
